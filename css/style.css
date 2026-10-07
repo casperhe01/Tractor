@@ -423,3 +423,103 @@ button.link { background: none; border: 0; padding: 2px 4px; text-decoration: un
   .screen-title { font-size: 24px; }
   .screen-panel { padding: 20px 16px 14px; }
 }
+
+/* ---------- phones: keep the whole table, and the hand, on screen (r18) ---------- */
+/* 100vh first for browsers without dvh; the iPhone home bar / rounded corners get safe-area padding */
+#app { height: 100vh; height: 100dvh; }
+.table {
+  padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+/* portrait phones */
+@media (max-width: 640px) {
+  .topbar { padding: 4px 8px; gap: 6px; }
+  .brand-title { font-size: 15px; }
+  .menu { flex-wrap: nowrap; gap: 0; }
+  .menu button { padding: 4px 6px; font-size: 12.5px; }
+  .menu button.icon { width: 26px; }
+  .table {
+    gap: 4px; overflow-y: auto; padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    grid-template-rows: auto auto auto auto minmax(calc(var(--ch) * 2), 1fr) auto auto;
+  }
+  /* score boards: seat tags + role on top, team name and level side by side */
+  .board { padding: 4px 8px; display: grid; grid-template-columns: 1fr auto; grid-template-areas: "head head" "team level"; align-items: center; column-gap: 6px; }
+  .board-head { grid-area: head; }
+  .board-team { grid-area: team; margin-top: 0; }
+  .board .board-level { grid-area: level; margin-top: 2px; height: 28px; min-width: 38px; font-size: 18px; }
+  .seat-tags b { font-size: 13px; }
+  .stat { padding: 1px 8px; min-width: 64px; }
+  .stat-label { font-size: 10px; }
+  .stat-value { font-size: 16px; }
+  .stat-value.small { margin-top: 3px; }
+  .point-cards { margin-top: 2px; min-height: 0; }
+  .seat-north .backs { display: none; }
+  .seat-name { font-size: 12px; padding: 1px 8px; }
+  .seat-decl .card { --cw: 28px; --ch: 40px; }
+  .trick { min-height: 0; }
+  .message { min-height: 22px; font-size: 13px; padding: 2px 12px; }
+  .suit-btn { width: 34px; height: 30px; }
+  .suit-btn .si { width: 18px; height: 18px; }
+  .ghost { padding: 5px 9px; font-size: 13px; }
+  .player { gap: 2px; }
+}
+@media (max-width: 360px) {
+  .brand { display: none; }
+  .topbar { justify-content: center; }
+}
+
+/* landscape phones: boards/status/message in a side column, table in the middle, hand across the full width */
+@media (max-height: 500px) and (min-width: 560px) {
+  :root { --cw: 40px; --ch: 58px; --cr: 5px; --bw: 18px; --bh: 26px; }
+  body { font-size: 13px; }
+  .topbar { padding: 2px max(10px, env(safe-area-inset-right)) 2px max(10px, env(safe-area-inset-left)); }
+  .brand-mark, .brand-sub { display: none; }
+  .brand-title { font-size: 14px; }
+  .menu button { padding: 2px 7px; font-size: 13px; }
+  .menu button.icon { width: 28px; }
+  .menu button.lang { padding: 1px 7px; }
+  #btnSave, #btnLoad { display: inline-block; }
+  .table {
+    gap: 4px 8px; overflow-y: auto;
+    padding: 4px max(10px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+    grid-template-columns: 150px auto 1fr auto;
+    grid-template-rows: auto auto minmax(var(--ch), 1fr) auto auto;
+    grid-template-areas:
+      "us     north  north  north"
+      "them   west   trick  east"
+      "status west   trick  east"
+      "msg    west   trick  east"
+      "player player player player";
+  }
+  /* boards on one line: seat tags, role, level */
+  .board { padding: 2px 6px; display: flex; align-items: center; gap: 4px; }
+  .board-head { flex: 1; min-width: 0; gap: 4px; }
+  .board-team { display: none; }
+  .board .board-level { margin-top: 0; height: 26px; min-width: 34px; font-size: 16px; padding: 0 5px; }
+  .board .lv-suit .si { width: 18px; height: 18px; }
+  .role { font-size: 10px; padding: 0 5px; white-space: nowrap; }
+  .seat-tags b { font-size: 12px; margin-right: 1px; padding: 0 3px; }
+  /* status as compact label/value rows */
+  .status { align-self: start; justify-self: stretch; }
+  .status-row { flex-direction: column; gap: 2px; }
+  .stat { flex-direction: row; justify-content: space-between; gap: 6px; padding: 0 8px; min-width: 0; border-radius: 7px; }
+  .stat-label { font-size: 10px; letter-spacing: .02em; white-space: nowrap; }
+  .stat-value { font-size: 14px; display: flex; align-items: center; gap: 3px; }
+  .stat-value .suit-chip { width: 1.2em; height: 1.2em; }
+  .stat-hand { justify-content: center; }
+  .stat-value.small { margin-top: 0; font-size: 12px; }
+  .point-cards { margin-top: 2px; min-height: 0; }
+  .seat-north .backs, .seat-west .backs, .seat-east .backs { display: none; }
+  .seat-west, .seat-east { justify-content: center; }
+  .seat-name { font-size: 12px; padding: 1px 8px; }
+  .seat-decl .card { --cw: 26px; --ch: 38px; }
+  .trick { min-height: calc(var(--ch) * 2 + 8px); }
+  .message { align-self: start; justify-self: stretch; font-size: 12px; min-height: 0; padding: 2px 8px; border-radius: 8px; }
+  .suit-btn { width: 32px; height: 26px; }
+  .suit-btn .si { width: 16px; height: 16px; }
+  .primary { min-width: 80px; padding: 5px 10px; }
+  .ghost { padding: 3px 9px; font-size: 12px; }
+  .player { gap: 0; }
+  .controls-hint { display: none; }
+}
