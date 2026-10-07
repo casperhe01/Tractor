@@ -250,11 +250,15 @@
     var minStep = cw * 0.46;
     var rows = N > 8 && (W - cw) / (N - 1) < minStep ? 2 : 1;
     var split = rows === 2 ? Math.max(0, n - Math.ceil(N / 2)) : n; // top row = cards [0, split)
+    // burying the kitty in two rows: pull the rows fully apart so a raised (selected) bottom card never
+    // covers the top row; the trick area is empty then, so the table gives it the room
+    var spread = rows === 2 && mode === 'bury';
     box.classList.toggle('two-rows', rows === 2);
-    var lift = rows === 2 ? Math.round(ch * 0.58) : 0;
-    // two rows: selected cards stay in place (highlighted instead) so a raised bottom card never covers the top row
-    var raise = rows === 2 ? 0 : 20;
-    box.style.height = rows === 2 ? (ch + lift + 4) + 'px' : '';
+    box.classList.toggle('spread', spread);
+    $('#table').classList.toggle('burying', mode === 'bury');
+    var raise = 20;
+    var lift = rows === 2 ? (spread ? ch + raise + 6 : Math.round(ch * 0.58)) : 0;
+    box.style.height = rows === 2 ? (ch + lift + 22) + 'px' : '';
     [[0, split, lift], [split, n, 0]].forEach(function (r) {
       var a = r[0], b = r[1], m = b - a;
       if (m <= 0) return;
@@ -276,6 +280,8 @@
 
   function renderTrick(newSeat) {
     $$('.slot').forEach(function (s) { s.innerHTML = ''; s.classList.remove('win'); });
+    // an empty trick area may shrink on small screens (more room for messages / declared cards)
+    $('#table').classList.toggle('trick-empty', !game || !game.trick || !game.trick.length);
     if (!game || !game.trick) return;
     var ctx = game.ctx && game.ctx.trump ? game.ctx : null;
     game.trick.forEach(function (p) {
@@ -313,9 +319,26 @@
       var right = nx ? Math.max(r.left + 16, Math.min(r.right, nx.getBoundingClientRect().left)) : r.right;
       x0 = Math.min(x0, r.left); x1 = Math.max(x1, right); top = Math.min(top, r.top);
     });
+    // burying: the button sits in the action bar (left, where the declare buttons were), never over the cards
+    btn.classList.toggle('docked', mode === 'bury');
+    if (mode === 'bury') {
+      var ar = $('#seat0 .actions').getBoundingClientRect();
+      btn.style.left = '0px';
+      // centred on the bar, but never lower than its bottom edge (raised cards start right below it)
+      btn.style.top = (Math.min(ar.top + (ar.height - btn.offsetHeight) / 2, ar.bottom - btn.offsetHeight - 2) - pr.top) + 'px';
+      return;
+    }
     var bw = btn.offsetWidth, bh = btn.offsetHeight;
     var cx = (x0 + x1) / 2 - pr.left, left = Math.max(4, Math.min(pr.width - bw - 4, cx - bw / 2));
     var y = top - pr.top - bh - 12;
+    // never cover the message (landscape phones keep it in the side column, right above the hand)
+    var msg = $('#message');
+    if (msg.textContent) {
+      var mr = msg.getBoundingClientRect();
+      var bl = pr.left + left, bt = pr.top + y;
+      if (mr.width && bl < mr.right && mr.left < bl + bw && bt < mr.bottom && mr.top < bt + bh)
+        left = Math.min(pr.width - bw - 4, mr.right - pr.left + 6);
+    }
     btn.style.left = left + 'px';
     btn.style.top = y + 'px';
   }
@@ -405,7 +428,7 @@
       var r = game.checkPlay(0, cards);
       if (!r.ok) { message(t('err_' + r.reason), true); return; }
     }
-    var p = pending; pending = null; mode = null; clearSelection(); renderButtons();
+    var p = pending; pending = null; mode = null; clearSelection(); layoutHand(); renderButtons();
     p(cards);
   }
 
