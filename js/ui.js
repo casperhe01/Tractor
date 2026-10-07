@@ -49,6 +49,13 @@
     renderScreen();
   }
 
+  /* ---------- usage counting (GoatCounter, only where index.html loads it — the public GitHub page) ---------- */
+  function track(name) {
+    try {
+      if (window.goatcounter && window.goatcounter.count) window.goatcounter.count({ path: name, title: name, event: true });
+    } catch (e) { /* counting must never affect the game */ }
+  }
+
   /* ---------- sound ---------- */
   var sounds = {};
   ['upgrade', 'getup', 'getdown', 'beupgrade'].forEach(function (n) {
@@ -601,7 +608,8 @@
         }
         break;
       case 'handEnd':
-        if (d.matchOver) { showEnd(d); return; }
+        track('hand-finished');
+        if (d.matchOver) { track(d.winnerTeam === 0 ? 'match-won' : 'match-lost'); showEnd(d); return; }
         return showResult(d);
     }
   }
@@ -645,6 +653,7 @@
 
   async function run(config) {
     abortGame();
+    track(config ? 'game-load' : 'game-start');
     var g = new Game(Object.assign({ humanSeat: 0, rules: settings.rules, difficulty: settings.difficulty, luck: settings.luck }, config || {}), null);
     g.hooks = hooksFor(g);
     game = g; selected = {}; turnSeat = null;
