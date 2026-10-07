@@ -243,6 +243,43 @@
     box.classList.remove('no-anim');
   }
 
+  // Split the hand into two rows by suit group (cards arrive sorted, so each suit is a contiguous run).
+  // Best: no suit split across rows, both rows fit the width, suits stay in the row they were in last
+  // time (no reshuffling after every trick), rows roughly balanced, bottom row the larger one.
+  // Returns { top: [indices], bottom: [indices] } or null (then the plain half/half split is used).
+  var rowMemory = {};
+  function planRows(suits, W, cw, minStep) {
+    var groups = [];
+    suits.forEach(function (s, i) {
+      var g = groups[groups.length - 1];
+      if (g && g.suit === s) g.idx.push(i); else groups.push({ suit: s, idx: [i] });
+    });
+    var G = groups.length;
+    if (G > 10) return null;
+    var fits = function (k, g) { return k <= 1 || cw + (k - 1) * minStep + Math.max(0, g - 1) * 10 <= W + 0.5; };
+    var best = null;
+    for (var mask = 0; mask < (1 << G); mask++) {
+      var t = 0, b = 0, tg = 0, bg = 0, moves = 0;
+      for (var i = 0; i < G; i++) {
+        var top = !!(mask & (1 << i)), m = groups[i].idx.length;
+        if (top) { t += m; tg++; } else { b += m; bg++; }
+        var was = rowMemory[groups[i].suit];
+        if (was !== undefined && was !== top) moves++;
+      }
+      if (!fits(t, tg) || !fits(b, bg)) continue;
+      var score = moves * 6 + Math.abs(b - t) + (t > b ? 1 : 0);
+      if (!best || score < best.score) best = { score: score, mask: mask };
+    }
+    if (!best) return null;
+    var res = { top: [], bottom: [] };
+    groups.forEach(function (g, i) {
+      var top = !!(best.mask & (1 << i));
+      rowMemory[g.suit] = top;
+      res[top ? 'top' : 'bottom'] = res[top ? 'top' : 'bottom'].concat(g.idx);
+    });
+    return res;
+  }
+
   function layoutHand() {
     var box = $('#hand'), els = Array.prototype.slice.call(box.children), n = els.length;
     if (!n) { box.style.height = ''; return; }
@@ -259,6 +296,18 @@
     // portrait phones: always two rows, even as the hand shrinks (no switch back to one row)
     if (window.matchMedia('(max-width: 640px) and (orientation: portrait)').matches) rows = 2;
     var split = rows === 2 ? Math.max(0, n - Math.ceil(N / 2)) : n; // top row = cards [0, split)
+    // after the deal, keep each suit (and the trumps) in one row when the rows can hold it
+    if (game && game.phase === 'deal') rowMemory = {}; // a new hand (and a new trump suit) starts afresh
+    if (rows === 2 && game && game.phase !== 'deal') {
+      var plan = planRows(cards.map(function (c) { return E.effSuit(c, ctx); }), W, cw, minStep);
+      if (plan) {
+        var order = plan.top.concat(plan.bottom);
+        els = order.map(function (k) { return els[k]; });
+        cards = order.map(function (k) { return cards[k]; });
+        els.forEach(function (el) { box.appendChild(el); }); // DOM order = reading order (top row, then bottom row)
+        split = plan.top.length;
+      }
+    }
     // burying the kitty in two rows: pull the rows fully apart so a raised (selected) bottom card never
     // covers the top row; the trick area is empty then, so the table gives it the room
     // two rows on a tall portrait screen: always keep the rows fully apart (the table has room to spare);
