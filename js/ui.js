@@ -431,11 +431,18 @@
   function clearSelection() { selected = {}; }
   function selectedCards() { return game.hands[0].filter(function (c) { return selected[c.id]; }); }
 
+  // 钓主: another player (partner or opponent) led trumps in the current trick → "西 钓主 · " before the prompt
+  function trumpLeadNote() {
+    if (!game || game.phase !== 'play' || !game.trick || !game.trick.length) return '';
+    var lead = game.trick[0];
+    if (lead.seat === 0 || E.uniformSuit(lead.cards, game.ctx) !== 'T') return '';
+    return t('msgTrumpLead', { seat: seatName(lead.seat) }) + ' · ';
+  }
   function promptTurnMessage() {
     if (mode === 'bury') message(t('msgBury'), false, true);
     else if (mode === 'play') {
       if (!game.trick.length) message(t('msgYourLead'), false, true);
-      else message(t('msgYourFollow', { n: game.trick[0].cards.length }), false, true);
+      else message(trumpLeadNote() + t('msgYourFollow', { n: game.trick[0].cards.length }), false, true);
     }
   }
 
@@ -662,12 +669,13 @@
         renderAll(); break;
       case 'turn':
         turnSeat = d.seat; renderSeats();
-        if (d.seat !== 0 && game.phase === 'play') message(t('msgWaiting', { seat: seatName(d.seat) }));
+        if (d.seat !== 0 && game.phase === 'play') message(trumpLeadNote() + t('msgWaiting', { seat: seatName(d.seat) }));
         break;
       case 'play':
         tick(440 + d.seat * 40);
         if (d.trick.length === 1) $$('.slot').forEach(function (s) { s.innerHTML = ''; s.classList.remove('win'); });
         renderTrick(d.seat); renderSeats(); if (d.seat === 0) renderHand();
+        if (d.trick.length === 1 && trumpLeadNote()) message(t('msgTrumpLead', { seat: seatName(d.seat) }));
         break;
       case 'throwFailed':
         message(t('msgThrowFailed', { seat: seatName(d.seat), cards: d.forced.map(cardText).join(' ') }), true);
