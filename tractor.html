@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tractor</title>
+<meta name="description" content="Tractor (拖拉机 / Shuang Kou) — the two-deck Chinese card game, rebuilt for the web from the 1998 Windows game.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='4' width='40' height='56' rx='6' fill='%23fffdf7' stroke='%23134d32' stroke-width='3'/%3E%3Crect x='18' y='8' width='40' height='52' rx='6' fill='%23fffdf7' stroke='%23134d32' stroke-width='3'/%3E%3Ctext x='38' y='44' font-size='28' text-anchor='middle' fill='%23c62828'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app" data-back="1">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">♠♥</span>
+      <div><div class="brand-title" data-i18n="title">Tractor</div><div class="brand-sub" data-i18n="subtitle"></div></div>
+    </div>
+    <nav class="menu">
+      <button id="btnNew" data-i18n="newGame" title="F2">New game</button>
+      <button id="btnOptions" data-i18n="options">Options</button>
+      <button id="btnRules" data-i18n="rules" title="F1">Rules</button>
+      <button id="btnSave" data-i18n="save">Save</button>
+      <button id="btnLoad" data-i18n="load">Load</button>
+      <button id="btnSound" class="icon" aria-pressed="true" title="Sound">🔊</button>
+      <button id="btnMusic" class="icon" aria-pressed="false" title="Music">♫</button>
+      <button id="btnLang" class="lang" data-i18n="lang">中文</button>
+    </nav>
+  </header>
+
+  <main class="table" id="table">
+    <!-- score boards (wood panels, as in the original) -->
+    <section class="board board-us" id="boardUs" aria-label="Your team">
+      <div class="board-head"><span class="seat-tags"><b data-seat-tag="0">南</b><b data-seat-tag="2">北</b></span><span class="role" id="roleUs"></span></div>
+      <div class="board-team" data-i18n="teamUs">Your team</div>
+      <div class="board-level"><span class="lv-rank" id="levelUs">2</span><span class="lv-suit" id="suitUs"></span></div>
+    </section>
+    <section class="board board-them" id="boardThem" aria-label="Opponents">
+      <div class="board-head"><span class="seat-tags"><b data-seat-tag="1">东</b><b data-seat-tag="3">西</b></span><span class="role" id="roleThem"></span></div>
+      <div class="board-team" data-i18n="teamThem">Opponents</div>
+      <div class="board-level"><span class="lv-rank" id="levelThem">2</span><span class="lv-suit" id="suitThem"></span></div>
+    </section>
+    <section class="status" aria-live="polite">
+      <div class="status-row">
+        <div class="stat"><span class="stat-label" data-i18n="trump">Trump</span><span class="stat-value" id="trumpVal">—</span></div>
+        <div class="stat"><span class="stat-label" data-i18n="defPoints">Defenders’ points</span><span class="stat-value" id="pointsVal">0</span></div>
+        <div class="stat stat-hand"><span class="stat-value small" id="handNo"></span></div>
+      </div>
+      <div class="point-cards" id="pointCards"></div>
+    </section>
+
+    <!-- opponents and partner -->
+    <div class="seat seat-north" id="seat2"><div class="seat-name"></div><div class="backs"></div><div class="seat-decl"></div></div>
+    <div class="seat seat-west" id="seat3"><div class="seat-name"></div><div class="backs"></div><div class="seat-decl"></div></div>
+    <div class="seat seat-east" id="seat1"><div class="seat-name"></div><div class="backs"></div><div class="seat-decl"></div></div>
+
+    <!-- trick area -->
+    <div class="trick" id="trick">
+      <div class="slot slot-0" data-slot="0"></div>
+      <div class="slot slot-1" data-slot="1"></div>
+      <div class="slot slot-2" data-slot="2"></div>
+      <div class="slot slot-3" data-slot="3"></div>
+    </div>
+
+    <div class="message" id="message" role="status"></div>
+
+    <!-- player area -->
+    <section class="player" id="seat0">
+      <div class="actions">
+        <div class="declare" id="declareBar" aria-label="Declare trump">
+          <button data-suit="C" class="suit-btn suit-C" aria-label="Clubs">♣</button>
+          <button data-suit="D" class="suit-btn suit-D" aria-label="Diamonds">♦</button>
+          <button data-suit="H" class="suit-btn suit-H" aria-label="Hearts">♥</button>
+          <button data-suit="S" class="suit-btn suit-S" aria-label="Spades">♠</button>
+          <button data-suit="N" class="suit-btn nt" aria-label="No trump">NT</button>
+        </div>
+        <div class="seat-decl seat-decl-me" id="myDecl"></div>
+        <div class="action-buttons">
+          <button id="btnLast" class="ghost" data-i18n="lastTrick">Last trick</button>
+          <button id="btnHint" class="ghost" data-i18n="hint">Hint</button>
+        </div>
+      </div>
+      <div class="hand" id="hand" aria-label="Your hand"></div>
+      <button id="btnPlay" class="primary play-float" disabled hidden><span class="hand-icon" aria-hidden="true">✋</span> <span id="playLabel" data-i18n="play">Play</span></button>
+      <div class="controls-hint" data-i18n="controls"></div>
+    </section>
+
+    <!-- start / end screens (cover the table; the menu bar stays usable) -->
+    <div class="screen" id="screen" data-kind="start">
+      <div class="confetti" id="confetti" aria-hidden="true"></div>
+      <div class="screen-scroll">
+        <div class="screen-panel" role="dialog" aria-modal="false" aria-labelledby="screenTitle">
+          <div class="screen-fan" id="screenFan" aria-hidden="true"></div>
+          <div class="screen-badge" id="screenBadge" aria-hidden="true"></div>
+          <h2 class="screen-title" id="screenTitle"></h2>
+          <p class="screen-sub" id="screenSub"></p>
+          <div class="screen-body" id="screenBody"></div>
+          <p class="screen-note" id="screenNote" role="status"></p>
+          <div class="screen-buttons">
+            <button class="primary big" id="btnStart"></button>
+            <button class="ghost" id="btnStartLoad" data-i18n="startLoad" hidden>Continue saved game</button>
+          </div>
+          <div class="screen-links">
+            <button class="link" id="btnStartOptions" data-i18n="options">Options</button>
+            <span aria-hidden="true">·</span>
+            <button class="link" id="btnStartRules" data-i18n="rules">Rules</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- dialogs -->
+<dialog id="dlgOptions" class="dlg">
+  <form method="dialog">
+    <h2 data-i18n="options">Options</h2>
+    <fieldset>
+      <legend data-i18n="optRules">Rules</legend>
+      <label><input type="checkbox" name="allowSelfOverride"> <span data-i18n="optSelfOverride"></span></label>
+      <label><input type="checkbox" name="allowPartnerProtect"> <span data-i18n="optPartnerProtect"></span></label>
+      <label><input type="checkbox" name="twoPerm"> <span data-i18n="optTwoPerm"></span></label>
+      <label><input type="checkbox" name="allowNoTrump"> <span data-i18n="optNoTrump"></span></label>
+      <label><input type="checkbox" name="fiveTenK"> <span data-i18n="optFiveTenK"></span></label>
+      <label><input type="checkbox" name="ajMust"> <span data-i18n="optAJ"></span></label>
+      <label><input type="checkbox" name="takeoverUp"> <span class="opt-text"><span data-i18n="optTakeoverUp"></span> <span class="opt-hint" data-i18n="optTakeoverUpHint"></span></span></label>
+      <p class="note" data-i18n="optRulesNote"></p>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="optDeclaring">Declaring trump</legend>
+      <label><input type="checkbox" name="autoDeclare"> <span class="opt-text"><span data-i18n="optAutoDeclare"></span> <span class="opt-hint" data-i18n="optAutoDeclareHint"></span></span></label>
+      <p class="note" data-i18n="optAutoDeclareNote"></p>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="optLuck">Good-hand mode</legend>
+      <select name="luck">
+        <option value="0" data-i18n="luck0"></option>
+        <option value="1" data-i18n="luck1"></option>
+        <option value="2" data-i18n="luck2"></option>
+        <option value="3" data-i18n="luck3"></option>
+      </select>
+      <p class="note" id="luckNote" data-i18n="optLuckNote"></p>
+    </fieldset>
+    <fieldset class="row2">
+      <legend data-i18n="optDifficulty">Difficulty</legend>
+      <label><span data-i18n="optPartner"></span>
+        <select name="partner"><option value="1" data-i18n="diff1"></option><option value="2" data-i18n="diff2"></option><option value="3" data-i18n="diff3"></option></select></label>
+      <label><span data-i18n="optOpponents"></span>
+        <select name="opponents"><option value="1" data-i18n="diff1"></option><option value="2" data-i18n="diff2"></option><option value="3" data-i18n="diff3"></option></select></label>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="optSpeed">Speed</legend>
+      <div class="seg">
+        <label><input type="radio" name="speed" value="1"> <span data-i18n="speed1"></span></label>
+        <label><input type="radio" name="speed" value="2"> <span data-i18n="speed2"></span></label>
+        <label><input type="radio" name="speed" value="3"> <span data-i18n="speed3"></span></label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend data-i18n="optBack">Card back</legend>
+      <label class="four-color"><input type="checkbox" name="fourColor"> <span class="opt-text"><span data-i18n="optFourColor"></span> <span class="opt-hint" data-i18n="optFourColorHint"></span></span>
+        <span class="fc-demo"><span class="suit-chip suit-S">♠</span><span class="suit-chip suit-H">♥</span><span class="suit-chip suit-C">♣</span><span class="suit-chip suit-D">♦</span></span></label>
+      <div class="backs-pick">
+        <label><input type="radio" name="back" value="1"><span class="mini-back b1"></span></label>
+        <label><input type="radio" name="back" value="2"><span class="mini-back b2"></span></label>
+        <label><input type="radio" name="back" value="3"><span class="mini-back b3"></span></label>
+        <label><input type="radio" name="back" value="4"><span class="mini-back b4"></span></label>
+        <label><input type="radio" name="back" value="5"><span class="mini-back b5"></span></label>
+      </div>
+    </fieldset>
+    <div class="dlg-buttons">
+      <button value="cancel" class="ghost" data-i18n="cancel">Cancel</button>
+      <button value="ok" class="primary" data-i18n="ok">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgResult" class="dlg">
+  <form method="dialog">
+    <h2 id="resTitle"></h2>
+    <div id="resBody"></div>
+    <div class="dlg-buttons"><button value="ok" class="primary" id="resBtn"></button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgLast" class="dlg dlg-last">
+  <form method="dialog">
+    <h2 data-i18n="lastTrick">Last trick</h2>
+    <div id="lastBody" class="last-body"></div>
+    <div class="dlg-buttons"><button value="ok" class="primary" data-i18n="ok">OK</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgRules" class="dlg dlg-rules">
+  <form method="dialog">
+    <div class="rules" data-lang="en">
+      <h2>Tractor — rules</h2>
+      <p><b>Tractor</b> (also called “Shuang Kou”) is a four-player partnership game played with two full decks including jokers (108 cards). You (South) partner North against East and West. Each player gets 25 cards; 8 form the <b>kitty</b>. Point cards: 5 = 5, 10 = 10, K = 10 (200 in total).</p>
+      <h3>Card order (example: playing 10s)</h3>
+      <p><b>Trumps:</b> Big joker, small joker, trump-suit 10, other 10s, then A K Q J 9 … 2 of the trump suit. <b>Other suits:</b> A K Q J 9 … 2. With “2 is permanent trump”, the 2s rank just below the 10s (trump-suit 2 above other 2s).</p>
+      <h3>Pairs and tractors</h3>
+      <p>A <b>pair</b> is two identical cards. A <b>tractor</b> is two or more pairs adjacent in rank and in the same suit, e.g. KKQQ, JJ99 (the 10s are trumps), 554433, or trump pairs such as small jokers + trump-suit 10s. Not tractors: 5533, two pairs of off-suit 10s, AA22.</p>
+      <h3>Declaring trump</h3>
+      <p>While the cards are dealt, the first player to show a card of the current level sets the trump suit. A second level card of the same suit locks it (<i>self-protect</i>). Another player can <i>override</i> by showing a pair of level cards in another suit. Optional rules: <i>self-override</i> (switch your own single to a pair of another suit), <i>partner protect</i> (your partner adds the second card), <i>no-trump</i> (show all four jokers). If nobody declares, the 3rd kitty card sets trump (skip jokers).</p>
+      <h3>Playing</h3>
+      <p>The declarer takes the kitty and buries 8 cards, then leads. You must follow suit with the same number of cards; if a pair is led you must play a pair if you have one; if a tractor is led you must play a tractor if you have one, else pairs. Several top cards of one suit may be led together (<i>throw</i>) — if any part can be beaten, the leader must play only the smallest beatable part. If you are void you may trump: your trumps must match the lead's pairs and tractors to win. Equal cards: the first played wins.</p>
+      <h3>Scoring</h3>
+      <p>Defenders collect points from tricks they win. If they win the last trick, the kitty points are multiplied: ×2 with a single, ×4 with a pair, ×8 with a tractor, ×16 with a three-pair tractor.</p>
+      <table class="rt"><tr><th>Defenders’ points</th><th>Result</th></tr>
+        <tr><td>0</td><td>Declarers +3 levels</td></tr><tr><td>5–35</td><td>Declarers +2</td></tr><tr><td>40–75</td><td>Declarers +1</td></tr>
+        <tr><td>80–115</td><td>Defenders take over (no level change)</td></tr><tr><td>120–155</td><td>Take over +1</td></tr><tr><td>160–195</td><td>Take over +2 …</td></tr></table>
+      <p class="note">The option “Level up on taking over” adds one level whenever the defenders take over: 80 → +1, 120 → +2, 160 → +3.</p>
+      <p>Levels go 2, 3 … K, A, then <b>no-trump</b> (if the no-trump option is on). Levels you can't skip: J and A (if that option is on), 5/10/K (if that option is on), and always the no-trump level. At the no-trump level there is no trump suit and no declaring; only the jokers are trumps (2s are not trump here, even with “2 is permanent trump”). If the declarers win, the declarer's partner declares next; if the defenders take over, the next player after the old declarer declares. The first team to win a hand as declarers at the top level (no-trump, or A if no-trump is off) wins the match.</p>
+      <h3>Tips (from the original help)</h3>
+      <ul><li>Bury few points unless you're sure the defenders can't win the last trick.</li><li>With the lead, play off-suit aces and tractors first.</li><li>Lead suits your partner is void in so they can trump points.</li><li>As declarer, bury a whole short suit so you can trump it later.</li><li>If you suspect points in the kitty, fight for the last trick.</li></ul>
+    </div>
+    <div class="rules" data-lang="zh">
+      <h2>拖拉机游戏规则</h2>
+      <p>“拖拉机”，又名“双抠”，是由“升级”发展演化而来的扑克游戏。四人结对竞赛，抢分升级。使用两副牌共 108 张，每人 25 张，底牌 8 张。分牌：5 为 5 分，10 和 K 为 10 分，共 200 分。</p>
+      <h3>牌的大小顺序（以打10为例）</h3>
+      <p><b>主牌</b>从大至小：大王，小王，主10，副10，A，K，Q，J，9，8，7，6，5，4，3，2。<b>副牌</b>：A，K，Q，J，9，8，7，6，5，4，3，2。2为常主时：大王，小王，主10，副10，主2，副2，A … 3。</p>
+      <h3>拖拉机的构成</h3>
+      <p>凡大小顺序相邻且花色相同的联对均构成拖拉机，如：KKQQ，JJ99，554433；主牌中凡大小顺序相邻联对均构成拖拉机，如：一对小王带一对主10，一对主10带一对副10，一对副10带一对主牌A。以下不是拖拉机：554，544，5533，两对副10，JJ1010，AA22。</p>
+      <h3>亮牌规则</h3>
+      <p>在发牌过程中，第一次亮出的10的花色作为主牌花色。自保：再亮出同花色的另一张10。反主：另一家亮出另一花色的一对10。自反：亮出一张10后又亮出另一花色的一对10（可选）。对家保：对家亮出该花色的第二张10（可选）。反无主：同时亮出四张王（可选）。若无人亮牌，以底牌第三张的花色为主（遇王顺延）。</p>
+      <h3>打牌规则</h3>
+      <p>同等大小的牌以先出者为大。同门花色的大牌可以联出（甩牌），若并非都是大牌，则必须出其中最小的牌。首家出对牌时，有对牌必须出对牌；首家出拖拉机时，有拖拉机必须出拖拉机，无拖拉机必须出对牌。无此门花色时可出主牌（毙），毙牌的拖拉机和对牌数目不得少于首家。</p>
+      <h3>抠底与升级</h3>
+      <p>以单张抠底底分乘二，对牌乘四，拖拉机乘八，三拖乘十六。闲家得0分庄家升三级；小于40分升二级；小于80分升一级。闲家得分大于等于80分且小于120分时，闲家上台；大于等于120分且小于160分时，闲家上台且升一级；大于等于160分且小于200分时，闲家上台且升二级，其余类推。（选项「上台即升级」：闲家上台时多升一级，即80分升一级，120分升两级，160分升三级。）级别顺序：2、3 … K、A，然后是<b>无主</b>（允许反无主时）。不可跳过的级别：J、A（选「A，J必打」时）、5、10、K（选「5，10，K必打」时），以及无主（打A后，若允许打无主，则必打）。打无主时没有主花色，也不亮主，只有大小王是主牌（即使选了「2为常主」，2也不是主牌）。庄家升级时由其对家坐庄；闲家上台时由原庄家的下家坐庄。在最高一级（无主，或不允许无主时的A）做庄并守住的一方获胜。</p>
+      <h3>策略与技巧</h3>
+      <ul><li>庄家扣底牌时少扣或不扣分。</li><li>获得出牌权后，应先出副牌的A、拖拉机等大牌。</li><li>出对家已出完的副牌，让同伴毙牌得分。</li><li>扣光一门较短的副牌，以便毙牌。</li><li>推测庄家在底牌扣了分时，尽量抠底。</li></ul>
+    </div>
+    <div class="dlg-buttons"><button value="ok" class="primary" data-i18n="ok">OK</button></div>
+  </form>
+</dialog>
+
+<audio id="music" src="assets/sounds/music.mp3" loop preload="none"></audio>
+
+<script src="js/engine.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/game.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
