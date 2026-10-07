@@ -541,6 +541,10 @@ button.link { background: none; border: 0; padding: 2px 4px; text-decoration: un
 /* portrait phones (r24): lift the message bubble a little further away from the action bar / Play bubble */
 @media (max-width: 640px) and (orientation: portrait) {
   .message { margin-bottom: 12px; }
+  /* point cards on one line (scrolls sideways when long) so the table height never grows mid-hand */
+  .point-cards { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; max-width: calc(100vw - 24px); margin-left: auto; margin-right: auto; scrollbar-width: none; }
+  .point-cards::-webkit-scrollbar { display: none; }
+  .point-cards .pc { flex: none; }
 }
 /* very short portrait screens (e.g. iPhone SE) have no height to spare */
 @media (max-width: 640px) and (orientation: portrait) and (max-height: 600px) {
