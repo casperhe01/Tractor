@@ -514,22 +514,49 @@
     layoutHand(); renderButtons();
     if ($('#message').classList.contains('error')) promptTurnMessage();
   }
+  // Touch: after selecting, swipe up on any hand card (≥ SWIPE_PX, mostly vertical) to play / bury the
+  // selection; sideways drags still range-select; a short or cancelled swipe snaps back. Mouse unchanged.
+  var SWIPE_PX = 40;
   function onHandDown(e) {
     if (e.button !== 0) return;
     var el = e.target.closest('.card'); if (!el || !mode) return;
     if (e.shiftKey) { selectSuitTo(el); return; }
-    var on = !selected[+el.dataset.id];
-    drag = { on: on, seen: {} }; drag.seen[el.dataset.id] = 1;
+    var was = !!selected[+el.dataset.id], on = !was;
+    drag = { on: on, seen: {}, el: el, was: was, x0: e.clientX, y0: e.clientY, touch: e.pointerType === 'touch' || e.pointerType === 'pen', dir: null };
+    drag.seen[el.dataset.id] = 1;
     setSel(el, on); afterSelChange();
+  }
+  function swipeOffset(dy) {
+    var box = $('#hand'), y = Math.max(-90, Math.min(0, dy));
+    box.classList.toggle('swiping', y !== 0);
+    $$('#hand .card.sel').forEach(function (c) { c.style.transform = y ? 'translateY(' + y + 'px)' : ''; });
   }
   function onHandMove(e) {
     if (!drag) return;
+    if (drag.touch && drag.dir !== 'x') {
+      var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+      if (!drag.dir) {
+        if (-dy > 12 && -dy > Math.abs(dx) * 1.2) {
+          drag.dir = 'up';
+          // a swipe never changes the card it started on
+          if (!!selected[+drag.el.dataset.id] !== drag.was) { setSel(drag.el, drag.was); afterSelChange(); }
+        } else if (Math.abs(dx) > 10 || dy > 12) drag.dir = 'x';
+      }
+      if (drag.dir === 'up') { swipeOffset(dy); e.preventDefault(); return; }
+    }
     var el = cardAt(e.clientX, e.clientY);
     if (!el || drag.seen[el.dataset.id]) return;
     drag.seen[el.dataset.id] = 1;
     if (!!selected[+el.dataset.id] !== drag.on) { setSel(el, drag.on); afterSelChange(); }
   }
-  function onHandUp() { drag = null; }
+  function onHandUp(e) {
+    var d = drag; drag = null;
+    if (!d || d.dir !== 'up') return;
+    var dy = e && e.type === 'pointerup' ? e.clientY - d.y0 : 0;
+    swipeOffset(0);
+    placePlayButton();
+    if (-dy >= SWIPE_PX && mode && Object.keys(selected).length) submit();
+  }
   function onHandDbl(e) {
     var el = e.target.closest('.card'); if (!el || mode !== 'play' || e.shiftKey) return;
     selected = {}; selected[+el.dataset.id] = true;
