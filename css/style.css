@@ -15,6 +15,8 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
+/* stop iOS Safari from enlarging text on its own (it can make a message overflow its bubble) */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body {
   background: var(--chrome); color: var(--ink);
   font: 15px/1.4 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -542,6 +544,9 @@ button.link { background: none; border: 0; padding: 2px 4px; text-decoration: un
 /* portrait phones (r24): lift the message bubble a little further away from the action bar / Play bubble */
 @media (max-width: 640px) and (orientation: portrait) {
   .message { margin-bottom: 12px; }
+  /* a wrapped (two-line) message keeps its text clear of the rounded ends: a one-line pill looks the same
+     (radius is capped at half its height), a two-line one gets gentler corners and a bit more side padding */
+  .message { border-radius: 14px; padding: 3px 16px; line-height: 1.35; overflow-wrap: anywhere; }
   /* point cards on one line (scrolls sideways when long) so the table height never grows mid-hand */
   .point-cards { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overflow-y: hidden; max-width: calc(100vw - 24px); margin-left: auto; margin-right: auto; scrollbar-width: none; }
   .point-cards::-webkit-scrollbar { display: none; }
