@@ -249,6 +249,8 @@
     var N = game && game.phase === 'deal' ? Math.max(n, 25) : n;
     var minStep = cw * 0.46;
     var rows = N > 8 && (W - cw) / (N - 1) < minStep ? 2 : 1;
+    // portrait phones: always two rows, even as the hand shrinks (no switch back to one row)
+    if (window.matchMedia('(max-width: 640px) and (orientation: portrait)').matches) rows = 2;
     var split = rows === 2 ? Math.max(0, n - Math.ceil(N / 2)) : n; // top row = cards [0, split)
     // burying the kitty in two rows: pull the rows fully apart so a raised (selected) bottom card never
     // covers the top row; the trick area is empty then, so the table gives it the room
