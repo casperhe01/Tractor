@@ -202,7 +202,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .hand { position: relative; height: calc(var(--ch) + 22px); margin: 0 auto; width: 100%; }
 .hand .card { position: absolute; bottom: 0; cursor: pointer; transition: transform .12s ease, bottom .12s ease; }
 .hand .card.sel { box-shadow: 0 0 0 2px var(--accent), 0 4px 10px rgba(0,0,0,.4); }
-.hand .card:hover { transform: translateY(-4px); }
+@media (hover: hover) { .hand .card:hover { transform: translateY(-4px); } }
 .hand .card .pip { display: none; }
 .hand .card:last-child .pip { display: block; }
 @media (max-width: 640px) { .hand .card:last-child .pip { display: none; } }
@@ -484,7 +484,7 @@ button.link { background: none; border: 0; padding: 2px 4px; text-decoration: un
     gap: 4px 8px; overflow-y: auto;
     padding: 4px max(10px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
     grid-template-columns: 150px auto 1fr auto;
-    grid-template-rows: auto auto minmax(var(--ch), 1fr) auto auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     grid-template-areas:
       "us     north  north  north"
       "them   west   trick  east"
@@ -509,13 +509,14 @@ button.link { background: none; border: 0; padding: 2px 4px; text-decoration: un
   .stat-value .suit-chip { width: 1.2em; height: 1.2em; }
   .stat-hand { justify-content: center; }
   .stat-value.small { margin-top: 0; font-size: 12px; }
-  .point-cards { margin-top: 2px; min-height: 0; }
+  .point-cards { display: none; } /* the points total is shown; the chips overflowed the side column */
   .seat-north .backs, .seat-west .backs, .seat-east .backs { display: none; }
   .seat-west, .seat-east { justify-content: center; }
   .seat-name { font-size: 12px; padding: 1px 8px; }
   .seat-decl .card { --cw: 26px; --ch: 38px; }
   .trick { min-height: calc(var(--ch) * 2 + 8px); }
-  .message { align-self: start; justify-self: stretch; font-size: 12px; min-height: 0; padding: 2px 8px; border-radius: 8px; }
+  .message { align-self: start; justify-self: stretch; font-size: 12px; line-height: 1.3; min-height: 0; max-height: 100%; overflow: hidden; padding: 2px 8px; border-radius: 8px; }
+  .message:empty { padding: 0; }
   .suit-btn { width: 32px; height: 26px; }
   .suit-btn .si { width: 16px; height: 16px; }
   .primary { min-width: 80px; padding: 5px 10px; }
@@ -523,3 +524,8 @@ button.link { background: none; border: 0; padding: 2px 4px; text-decoration: un
   .player { gap: 0; }
   .controls-hint { display: none; }
 }
+
+/* hand on narrow screens (r19): no bounce when re-rendered; in two rows the selected cards stay put
+   (a raised bottom card used to cover the top row) and are highlighted instead */
+.hand.no-anim .card { transition: none !important; }
+.hand.two-rows .card.sel { background: #ffe9a8; border-color: #c99a00; box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0,0,0,.4); }
