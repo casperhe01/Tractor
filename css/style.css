@@ -537,3 +537,12 @@ button.link { background: none; border: 0; padding: 2px 4px; text-decoration: un
 @media (min-width: 641px) and (min-height: 501px) { .table.burying, .table.trick-empty { grid-template-rows: auto auto 1fr auto auto; } }
 .play-float.docked { transition: none; }
 .play-float.docked::after { display: none; }
+
+/* portrait phones (r24): lift the message bubble a little further away from the action bar / Play bubble */
+@media (max-width: 640px) and (orientation: portrait) {
+  .message { margin-bottom: 12px; }
+}
+/* very short portrait screens (e.g. iPhone SE) have no height to spare */
+@media (max-width: 640px) and (orientation: portrait) and (max-height: 600px) {
+  .message { margin-bottom: 0; }
+}
