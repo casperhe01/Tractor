@@ -334,7 +334,8 @@ html[data-colors="2"] { --suit-C: #1d1d1f; --suit-D: #d32f2f; }
 .play-float.bad { filter: saturate(.35) brightness(.85); }
 .play-float:disabled { opacity: .7; cursor: default; }
 .play-float:disabled::after { border-top-color: var(--accent); }
-.hand { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.hand { touch-action: none; user-select: none; -webkit-user-select: none; } /* the hand handles its own touch gestures (drag-select, swipe up to play) */
+.hand.swiping .card { transition: none; }
 @media (max-width: 640px) { .play-float { min-width: 0; padding: 6px 12px; } }
 
 /* ---------- start / end screens ---------- */
