@@ -244,7 +244,7 @@
   }
 
   // Split the hand into two rows by suit group (cards arrive sorted, so each suit is a contiguous run).
-  // Best: no suit split across rows, both rows fit the width, suits stay in the row they were in last
+  // Best: no suit split across rows, both rows fit the width, trumps in the bottom row, suits stay in the row they were in last
   // time (no reshuffling after every trick), rows roughly balanced, bottom row the larger one.
   // Returns { top: [indices], bottom: [indices] } or null (then the plain half/half split is used).
   var rowMemory = {};
@@ -259,15 +259,17 @@
     var fits = function (k, g) { return k <= 1 || cw + (k - 1) * minStep + Math.max(0, g - 1) * 10 <= W + 0.5; };
     var best = null;
     for (var mask = 0; mask < (1 << G); mask++) {
-      var t = 0, b = 0, tg = 0, bg = 0, moves = 0;
+      var t = 0, b = 0, tg = 0, bg = 0, moves = 0, trumpTop = 0;
       for (var i = 0; i < G; i++) {
         var top = !!(mask & (1 << i)), m = groups[i].idx.length;
+        if (top && groups[i].suit === 'T') trumpTop = 1;
         if (top) { t += m; tg++; } else { b += m; bg++; }
         var was = rowMemory[groups[i].suit];
         if (was !== undefined && was !== top) moves++;
       }
       if (!fits(t, tg) || !fits(b, bg)) continue;
-      var score = moves * 6 + Math.abs(b - t) + (t > b ? 1 : 0);
+      // the trumps belong in the bottom row whenever the rows can be arranged that way
+      var score = trumpTop * 100 + moves * 6 + Math.abs(b - t) + (t > b ? 1 : 0);
       if (!best || score < best.score) best = { score: score, mask: mask };
     }
     if (!best) return null;
