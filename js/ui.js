@@ -229,7 +229,11 @@
       if (selected[c.id]) el.classList.add('sel');
       box.appendChild(el);
     });
+    // place freshly built cards without animating them in from the bottom (that made the top row bounce)
+    box.classList.add('no-anim');
     layoutHand();
+    void box.offsetWidth;
+    box.classList.remove('no-anim');
   }
 
   function layoutHand() {
@@ -239,20 +243,18 @@
     var ctx = displayCtx() || { level: game.level, trump: 'none', twoPerm: game.rules.twoPerm };
     var cards = els.map(function (el) { return cardById(+el.dataset.id); });
     var suitOf = function (k) { return E.effSuit(cards[k], ctx); };
-    // one row if every card keeps its rank + suit index visible; otherwise two rows (narrow screens)
+    // one row if every card keeps its rank + suit index visible; otherwise two rows (narrow screens).
+    // While dealing, plan for the full 25-card hand so the layout never switches mid-deal; the bottom
+    // row fills first (up to half the hand) and extra cards go to the top row, so rows only grow.
+    var N = game && game.phase === 'deal' ? Math.max(n, 25) : n;
     var minStep = cw * 0.46;
-    var rows = n > 8 && (W - cw) / (n - 1) < minStep ? 2 : 1;
-    var split = n;
-    if (rows === 2) {
-      // break between suits nearest the middle so groups stay together when possible
-      split = Math.ceil(n / 2);
-      for (var d = 0; d <= 4; d++) {
-        if (split + d < n && suitOf(split + d) !== suitOf(split + d - 1)) { split += d; break; }
-        if (split - d > 0 && suitOf(split - d) !== suitOf(split - d - 1)) { split -= d; break; }
-      }
-    }
+    var rows = N > 8 && (W - cw) / (N - 1) < minStep ? 2 : 1;
+    var split = rows === 2 ? Math.max(0, n - Math.ceil(N / 2)) : n; // top row = cards [0, split)
+    box.classList.toggle('two-rows', rows === 2);
     var lift = rows === 2 ? Math.round(ch * 0.58) : 0;
-    box.style.height = rows === 2 ? (ch + lift + 22) + 'px' : '';
+    // two rows: selected cards stay in place (highlighted instead) so a raised bottom card never covers the top row
+    var raise = rows === 2 ? 0 : 20;
+    box.style.height = rows === 2 ? (ch + lift + 4) + 'px' : '';
     [[0, split, lift], [split, n, 0]].forEach(function (r) {
       var a = r[0], b = r[1], m = b - a;
       if (m <= 0) return;
@@ -265,7 +267,7 @@
       for (var j = a; j < b; j++) {
         if (j > a && suitOf(j) !== suitOf(j - 1)) x += gap;
         els[j].style.left = x + 'px';
-        els[j].style.bottom = (r[2] + (els[j].classList.contains('sel') ? 20 : 0)) + 'px';
+        els[j].style.bottom = (r[2] + (els[j].classList.contains('sel') ? raise : 0)) + 'px';
         els[j].style.zIndex = j + 1;
         x += step;
       }
