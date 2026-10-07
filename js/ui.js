@@ -252,13 +252,18 @@
     var split = rows === 2 ? Math.max(0, n - Math.ceil(N / 2)) : n; // top row = cards [0, split)
     // burying the kitty in two rows: pull the rows fully apart so a raised (selected) bottom card never
     // covers the top row; the trick area is empty then, so the table gives it the room
-    var spread = rows === 2 && mode === 'bury';
+    // two rows on a tall portrait screen: always keep the rows fully apart (the table has room to spare);
+    // on short screens only while burying
+    var spread = rows === 2 && (mode === 'bury' || window.innerHeight >= 660);
     box.classList.toggle('two-rows', rows === 2);
     box.classList.toggle('spread', spread);
     $('#table').classList.toggle('burying', mode === 'bury');
     var raise = 20;
     var lift = rows === 2 ? (spread ? ch + raise + 6 : Math.round(ch * 0.58)) : 0;
-    box.style.height = rows === 2 ? (ch + lift + 22) + 'px' : '';
+    // with the rows apart (outside burying, where the button docks in the action bar), leave headroom above
+    // the top row so the Play bubble sits as far above a selected top-row card as it does for the bottom row
+    var head = spread && mode !== 'bury' ? 46 : 0;
+    box.style.height = rows === 2 ? (ch + lift + 22 + head) + 'px' : '';
     [[0, split, lift], [split, n, 0]].forEach(function (r) {
       var a = r[0], b = r[1], m = b - a;
       if (m <= 0) return;
@@ -331,14 +336,20 @@
     var bw = btn.offsetWidth, bh = btn.offsetHeight;
     var cx = (x0 + x1) / 2 - pr.left, left = Math.max(4, Math.min(pr.width - bw - 4, cx - bw / 2));
     var y = top - pr.top - bh - 12;
-    // never cover the message (landscape phones keep it in the side column, right above the hand)
-    var msg = $('#message');
-    if (msg.textContent) {
-      var mr = msg.getBoundingClientRect();
-      var bl = pr.left + left, bt = pr.top + y;
-      if (mr.width && bl < mr.right && mr.left < bl + bw && bt < mr.bottom && mr.top < bt + bh)
-        left = Math.min(pr.width - bw - 4, mr.right - pr.left + 6);
+    // never cover the message or the Last trick / Hint buttons
+    var msg = $('#message'), mr = msg.textContent ? msg.getBoundingClientRect() : null;
+    var ab = $('#seat0 .action-buttons').getBoundingClientRect(), ar = $('#seat0 .actions').getBoundingClientRect();
+    var hit = function (r) { var bl = pr.left + left, bt = pr.top + y; return r && r.width && bl < r.right && r.left < bl + bw && bt < r.bottom && r.top < bt + bh; };
+    if (hit(mr) && window.matchMedia('(max-height: 500px) and (min-width: 560px)').matches) {
+      // landscape phones: the message sits in the side column, so slide right of it
+      left = Math.min(pr.width - bw - 4, mr.right - pr.left + 6);
+    } else if (hit(mr) || hit(ab)) {
+      // otherwise drop into the free left part of the action bar (below the message), left of Last trick / Hint
+      y = ar.top - pr.top + (ar.height - bh) / 2;
+      if (mr) y = Math.max(y, mr.bottom - pr.top + 2);
+      left = Math.max(4, Math.min(left, ab.left - pr.left - bw - 8));
     }
+    if (hit(ab)) left = Math.max(4, ab.left - pr.left - bw - 8);
     btn.style.left = left + 'px';
     btn.style.top = y + 'px';
   }
