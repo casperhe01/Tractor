@@ -452,7 +452,7 @@
    *  - nobody has declared → declare your strongest suit (a pair if you have one, which locks it)
    *  - your own single → lock it (自保); partner's single → partner protect (对家保) if allowed
    *  - opponents' single → override with your strongest pair (反主)
-   *  - four jokers → no-trump, unless your own team's suit already stands
+   *  - four jokers → never no-trump automatically (owner, r36): the NT button stays lit for you to press
    *  Never overrides your partner, and never switches your own suit (自反).
    */
   function autoDeclarePick(g) {
@@ -466,11 +466,11 @@
     var ok = opts.filter(function (o) {
       if (o.kind === 'selfOverride') return false;
       if (o.kind === 'override' && ours) return false;
-      if (o.suit === 'N') return !ours;
+      if (o.suit === 'N') return false; // 反无主 is always your own choice
       return true;
     });
     if (!ok.length) return null;
-    var rank = { selfProtect: 3, partnerProtect: 3, noTrump: 2, override: 1, first: 0 };
+    var rank = { selfProtect: 3, partnerProtect: 3, override: 1, first: 0 };
     ok.sort(function (a, b) {
       return (rank[b.kind] - rank[a.kind]) || (b.count - a.count) || (strength(b.suit) - strength(a.suit));
     });
