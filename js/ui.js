@@ -898,10 +898,10 @@
   }
 
   /* ---------- wire up ---------- */
-  // Good-hand mode note: must-win mode gets its own explanation.
+  // Good-hand mode note: each level has its own short explanation with the measured hand-win rate.
   function syncLuckNote() {
-    var v = +$('#dlgOptions select[name=luck]').value;
-    $('#luckNote').textContent = t(v === 3 ? 'optLuckNote3' : 'optLuckNote');
+    var v = +$('#dlgOptions select[name=luck]').value || 0;
+    $('#luckNote').textContent = t('optLuckNote' + v);
   }
 
   function applyColors() { document.documentElement.dataset.colors = settings.fourColor ? '4' : '2'; }
