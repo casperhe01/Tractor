@@ -6,7 +6,7 @@
 <title>Tractor</title>
 <meta name="description" content="Tractor (拖拉机 / Shuang Kou) — the two-deck Chinese card game, rebuilt for the web from the 1998 Windows game.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='4' width='40' height='56' rx='6' fill='%23fffdf7' stroke='%23134d32' stroke-width='3'/%3E%3Crect x='18' y='8' width='40' height='52' rx='6' fill='%23fffdf7' stroke='%23134d32' stroke-width='3'/%3E%3Ctext x='38' y='44' font-size='28' text-anchor='middle' fill='%23c62828'%3E%E2%99%A5%3C/text%3E%3C/svg%3E">
-<link rel="stylesheet" href="css/style.css?v=34">
+<link rel="stylesheet" href="css/style.css?v=40">
 </head>
 <body>
 <div id="app" data-back="1">
@@ -19,8 +19,7 @@
       <button id="btnNew" data-i18n="newGame" title="F2">New game</button>
       <button id="btnOptions" data-i18n="options">Options</button>
       <button id="btnRules" data-i18n="rules" title="F1">Rules</button>
-      <button id="btnSave" data-i18n="save">Save</button>
-      <button id="btnLoad" data-i18n="load">Load</button>
+      <button id="btnSaves" aria-haspopup="menu" aria-expanded="false"><span class="saves-full" data-i18n="saves">Saved games</span><span class="saves-icon" aria-hidden="true">💾</span></button>
       <button id="btnSound" class="icon" aria-pressed="true" title="Sound">🔊</button>
       <button id="btnMusic" class="icon" aria-pressed="false" title="Music">♫</button>
       <button id="btnLang" class="lang" data-i18n="lang">中文</button>
@@ -30,12 +29,12 @@
   <main class="table" id="table">
     <!-- score boards (wood panels, as in the original) -->
     <section class="board board-us" id="boardUs" aria-label="Your team">
-      <div class="board-head"><span class="seat-tags"><b data-seat-tag="0">南</b><b data-seat-tag="2">北</b></span><span class="role" id="roleUs"></span></div>
+      <div class="board-head"><span class="seat-tags"><b data-seat-tag="2">北</b><b data-seat-tag="0">南</b></span><span class="role" id="roleUs"></span></div>
       <div class="board-team" data-i18n="teamUs">Your team</div>
       <div class="board-level"><span class="lv-rank" id="levelUs">2</span><span class="lv-suit" id="suitUs"></span></div>
     </section>
     <section class="board board-them" id="boardThem" aria-label="Opponents">
-      <div class="board-head"><span class="seat-tags"><b data-seat-tag="1">东</b><b data-seat-tag="3">西</b></span><span class="role" id="roleThem"></span></div>
+      <div class="board-head"><span class="seat-tags"><b data-seat-tag="3">西</b><b data-seat-tag="1">东</b></span><span class="role" id="roleThem"></span></div>
       <div class="board-team" data-i18n="teamThem">Opponents</div>
       <div class="board-level"><span class="lv-rank" id="levelThem">2</span><span class="lv-suit" id="suitThem"></span></div>
     </section>
@@ -233,14 +232,33 @@
   </form>
 </dialog>
 
+<!-- save / load slot menu (filled by ui.js) -->
+<div id="slotMenu" class="slot-menu" role="menu" hidden></div>
+<div id="undoToast" class="undo-toast" role="status" hidden><span id="undoText"></span><button type="button" id="undoBtn">Undo</button></div>
+
+<dialog id="dlgConfirm" class="dlg dlg-confirm">
+  <form method="dialog">
+    <p id="confirmText"></p>
+    <div class="dlg-buttons"><button value="cancel" class="ghost" data-i18n="cancel">Cancel</button><button value="ok" class="primary" id="confirmOk">OK</button></div>
+  </form>
+</dialog>
+
 <audio id="music" src="assets/sounds/music.mp3" loop preload="none"></audio>
 
 <script src="js/engine.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/game.js"></script>
-<script src="js/i18n.js?v=36"></script>
-<script src="js/ui.js?v=36"></script>
+<script src="js/i18n.js?v=40"></script>
+<script src="js/ui.js?v=41"></script>
 <!-- visitor + event counting (GoatCounter) -->
-<script data-goatcounter="https://casper0379.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+<script>
+  // only count on the public web page; on file:// a "//host/..." URL becomes a Windows network-share lookup that stalls loading for ~10 s
+  if (/^https?:$/.test(location.protocol)) {
+    var gc = document.createElement('script');
+    gc.async = true; gc.src = 'https://gc.zgo.at/count.js';
+    gc.setAttribute('data-goatcounter', 'https://casper0379.goatcounter.com/count');
+    document.body.appendChild(gc);
+  }
+</script>
 </body>
 </html>

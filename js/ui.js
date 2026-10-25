@@ -45,6 +45,7 @@
     document.documentElement.lang = settings.lang;
     $$('[data-i18n]').forEach(function (el) { el.textContent = t(el.getAttribute('data-i18n')); });
     document.title = settings.lang === 'zh' ? '拖拉机大赛' : 'Tractor';
+    $('#btnSaves').title = t('saves');
     renderAll();
     renderScreen();
   }
@@ -753,7 +754,205 @@
 
   /* ---------- start / end screens ---------- */
   function topLevelText() { return rankText(E.maxLevel(settings.rules)); }
-  function hasSave() { var st = load('tractor.save', null); return !!(st && st.levels); }
+  /* ---------- saved games: up to three slots, each { state, time } ---------- */
+  var SLOTS = 3;
+  function getSaves() {
+    var a = load('tractor.saves', null);
+    if (!Array.isArray(a)) {
+      a = [null, null, null];
+      var old = load('tractor.save', null); // single save from earlier versions → slot 1
+      if (old && old.levels) a[0] = { state: old, time: null };
+      store('tractor.saves', a);
+      try { localStorage.removeItem('tractor.save'); } catch (e) {}
+    }
+    for (var i = 0; i < SLOTS; i++) if (!a[i] || !a[i].state || !a[i].state.levels) a[i] = null;
+    return a.slice(0, SLOTS);
+  }
+  function saveCount() { return getSaves().filter(Boolean).length; }
+  function hasSave() { return saveCount() > 0; }
+  function latestSlot() { // most recent save (an undated migrated one counts as oldest)
+    var a = getSaves(), best = -1;
+    a.forEach(function (s, i) { if (s && (best < 0 || (s.time || 0) > (a[best].time || 0))) best = i; });
+    return best;
+  }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function stampText(ms) {
+    if (!ms) return t('slotOld');
+    var d = new Date(ms);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  function askConfirm(text, okLabel) {
+    return new Promise(function (res) {
+      var dlg = $('#dlgConfirm');
+      $('#confirmText').textContent = text;
+      $('#confirmOk').textContent = okLabel || t('ok');
+      dlg.returnValue = '';
+      dlg.addEventListener('close', function done() { dlg.removeEventListener('close', done); res(dlg.returnValue === 'ok'); });
+      dlg.showModal();
+      try { dlg.querySelector('button[value=cancel]').focus(); } catch (e) {}
+    });
+  }
+
+  // One "Saved games" button. Click a saved slot → load it; click an empty slot → save there.
+  // Slots are never overwritten: delete one first (swipe left, the × on hover, or the Delete key — all undoable),
+  // or delete them all (asks first).
+  var slotMenuOpen = false, slotConfirm = -1, slotSwipe = null;
+  var canHover = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  function closeSlotMenu() {
+    slotMenuOpen = false; slotConfirm = -1; slotSwipe = null; $('#slotMenu').hidden = true;
+    $('#btnSaves').setAttribute('aria-expanded', 'false');
+  }
+  function openSlotMenu() {
+    if (slotMenuOpen) { closeSlotMenu(); return; }
+    slotMenuOpen = true; slotConfirm = -1;
+    renderSlotMenu();
+    var m = $('#slotMenu'), r = $('#btnSaves').getBoundingClientRect();
+    var w = m.offsetWidth, left = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8);
+    m.style.left = left + 'px'; m.style.top = (r.bottom + 4) + 'px';
+    $('#btnSaves').setAttribute('aria-expanded', 'true');
+    var first = m.querySelector('.slot-item:not([disabled])'); if (first) first.focus();
+  }
+  function renderSlotMenu(focusSlot) {
+    var m = $('#slotMenu'), saves = getSaves(), n = saves.filter(Boolean).length, blocked = saveBlocked();
+    m.innerHTML = ''; m.hidden = false;
+    var head = document.createElement('div'); head.className = 'slot-head';
+    head.textContent = n === SLOTS ? t(canHover ? 'slotsFullMouse' : 'slotsFullTouch') : (blocked || t(canHover ? 'savesHintMouse' : 'savesHintTouch'));
+    if (n === SLOTS || blocked) head.classList.add('warn');
+    m.appendChild(head);
+    saves.forEach(function (s, i) {
+      var wrap = document.createElement('div'); wrap.className = 'slot-wrap'; wrap.dataset.slot = i;
+      if (s && slotConfirm === i) { // inline "Delete slot 2?  [Delete] [Cancel]"
+        wrap.classList.add('confirming');
+        wrap.innerHTML = '<span class="slot-q"></span><button type="button" class="slot-yes"></button><button type="button" class="slot-no"></button>';
+        wrap.querySelector('.slot-q').textContent = t('confirmDeleteSlot', { n: i + 1 });
+        wrap.querySelector('.slot-yes').textContent = t('deleteBtn');
+        wrap.querySelector('.slot-no').textContent = t('cancel');
+        wrap.querySelector('.slot-yes').addEventListener('click', function () { deleteSlot(i); });
+        wrap.querySelector('.slot-no').addEventListener('click', function () { slotConfirm = -1; renderSlotMenu(i); });
+        m.appendChild(wrap);
+        return;
+      }
+      var b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
+      b.className = 'slot-item ' + (s ? 'filled' : 'empty');
+      b.innerHTML = '<b></b><span class="slot-time"></span><span class="slot-act"></span><span class="slot-lv"></span>';
+      b.querySelector('b').textContent = t('slot', { n: i + 1 });
+      b.querySelector('.slot-time').textContent = s ? stampText(s.time) : t('slotEmpty');
+      b.querySelector('.slot-act').innerHTML = '<i aria-hidden="true">' + (s ? '✓' : '+') + '</i>'; b.querySelector('.slot-act').appendChild(document.createTextNode(t(s ? 'slotLoad' : 'slotSave')));
+      if (s) b.querySelector('.slot-lv').textContent = t('teamUs') + ' ' + rankText(s.state.levels[0]) + ' · ' + t('teamThem') + ' ' + rankText(s.state.levels[1]);
+      if (!s && blocked) b.disabled = true;
+      b.addEventListener('click', function () {
+        if (b.dataset.swiped) { delete b.dataset.swiped; return; } // the end of a swipe is not a click
+        if (wrap.classList.contains('open')) { closeSwipe(wrap); return; } // tap an opened row → close it
+        closeSlotMenu(); if (s) loadGame(i); else saveGame(i);
+      });
+      if (s) {
+        // revealed by swiping left (touch or mouse drag)
+        var under = document.createElement('button'); under.type = 'button'; under.className = 'slot-under'; under.tabIndex = -1;
+        under.textContent = t('deleteBtn');
+        under.addEventListener('click', function () { deleteSlot(i); });
+        wrap.appendChild(under);
+        // the × that appears on hover (mouse)
+        var x = document.createElement('button'); x.type = 'button'; x.className = 'slot-x'; x.innerHTML = '<i aria-hidden="true">✕</i>'; x.appendChild(document.createTextNode(t('deleteBtn')));
+        x.title = x.ariaLabel = t('deleteSlotTitle', { n: i + 1 });
+        x.addEventListener('click', function (e) { e.stopPropagation(); slotConfirm = i; renderSlotMenu(); var y = $('#slotMenu .slot-no'); if (y) y.focus(); });
+        wrap.appendChild(x);
+        bindSwipe(wrap, b, i);
+      }
+      wrap.insertBefore(b, wrap.firstChild);
+      m.appendChild(wrap);
+    });
+    var del = document.createElement('button'); del.type = 'button'; del.setAttribute('role', 'menuitem'); del.className = 'slot-delete';
+    del.textContent = t('deleteAll'); del.disabled = !n;
+    del.addEventListener('click', function () { closeSlotMenu(); deleteAllSaves(); });
+    m.appendChild(document.createElement('hr')); m.appendChild(del);
+    if (typeof focusSlot === 'number') {
+      var f = m.querySelector('.slot-wrap[data-slot="' + focusSlot + '"] .slot-item:not([disabled])') || m.querySelector('.slot-item:not([disabled])');
+      if (f) f.focus();
+    }
+  }
+
+  // swipe left on a saved slot: a short swipe reveals the red Delete button, a long one deletes at once
+  var REVEAL = 84;
+  function closeSwipe(wrap) {
+    wrap.classList.remove('open');
+    var it = wrap.querySelector('.slot-item'); if (it) it.style.transform = '';
+  }
+  function bindSwipe(wrap, item, slot) {
+    item.style.touchAction = 'pan-y';
+    item.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      $$('#slotMenu .slot-wrap.open').forEach(function (w) { if (w !== wrap) closeSwipe(w); });
+      slotSwipe = { wrap: wrap, item: item, slot: slot, id: e.pointerId, x0: e.clientX, y0: e.clientY,
+        base: wrap.classList.contains('open') ? -REVEAL : 0, drag: false, dx: 0 };
+    });
+    item.addEventListener('pointermove', function (e) {
+      var sw = slotSwipe; if (!sw || sw.item !== item || sw.id !== e.pointerId) return;
+      var dx = e.clientX - sw.x0, dy = e.clientY - sw.y0;
+      if (!sw.drag) {
+        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) { if (Math.abs(dy) > 10) slotSwipe = null; return; }
+        sw.drag = true; wrap.classList.add('dragging');
+        try { item.setPointerCapture(e.pointerId); } catch (er) {}
+      }
+      sw.dx = Math.min(0, Math.max(-wrap.offsetWidth, sw.base + dx));
+      item.style.transform = 'translateX(' + sw.dx + 'px)';
+    });
+    function end(e) {
+      var sw = slotSwipe; if (!sw || sw.item !== item || sw.id !== e.pointerId) return;
+      slotSwipe = null; wrap.classList.remove('dragging');
+      if (!sw.drag) return;
+      item.dataset.swiped = '1'; setTimeout(function () { delete item.dataset.swiped; }, 350);
+      if (e.type === 'pointercancel') { item.style.transform = sw.base ? 'translateX(' + (-REVEAL) + 'px)' : ''; return; }
+      if (-sw.dx > wrap.offsetWidth * 0.55) { // far enough: slide out and delete
+        item.style.transform = 'translateX(' + (-wrap.offsetWidth) + 'px)';
+        setTimeout(function () { deleteSlot(slot); }, 160);
+      } else if (-sw.dx > REVEAL / 2) { wrap.classList.add('open'); item.style.transform = 'translateX(' + (-REVEAL) + 'px)'; }
+      else closeSwipe(wrap);
+    }
+    item.addEventListener('pointerup', end);
+    item.addEventListener('pointercancel', end);
+  }
+
+  // delete one slot, with a few seconds to undo
+  var undoInfo = null;
+  function deleteSlot(i) {
+    var saves = getSaves(); if (!saves[i]) return;
+    undoInfo = { slot: i, entry: saves[i] };
+    saves[i] = null; store('tractor.saves', saves);
+    slotConfirm = -1;
+    if (slotMenuOpen) renderSlotMenu(i);
+    if (screen) renderScreen();
+    showUndo(t('deletedSlot', { n: i + 1 }));
+  }
+  function undoDelete() {
+    var u = undoInfo; hideUndo(); if (!u) return;
+    var saves = getSaves();
+    if (saves[u.slot]) { notify(t('undoTaken', { n: u.slot + 1 }), true); return; } // something was saved there meanwhile
+    saves[u.slot] = u.entry; store('tractor.saves', saves);
+    if (slotMenuOpen) renderSlotMenu(u.slot);
+    if (screen) renderScreen();
+    notify(t('restoredSlot', { n: u.slot + 1 }));
+  }
+  var undoTimer = null;
+  function showUndo(txt) {
+    var el = $('#undoToast');
+    $('#undoText').textContent = txt; $('#undoBtn').textContent = t('undo');
+    el.hidden = false; el.classList.remove('out'); void el.offsetWidth; el.classList.add('in');
+    clearTimeout(undoTimer); undoTimer = setTimeout(hideUndo, 5000);
+  }
+  function hideUndo() {
+    clearTimeout(undoTimer); undoInfo = null;
+    var el = $('#undoToast'); el.classList.remove('in'); el.hidden = true;
+  }
+
+  async function deleteAllSaves() {
+    var n = saveCount(); if (!n) return;
+    if (!(await askConfirm(t('confirmDeleteAll', { count: n }), t('deleteBtn')))) return;
+    store('tractor.saves', [null, null, null]);
+    hideUndo();
+    notify(t('deletedAll'));
+    if (screen) renderScreen();
+  }
 
   function showScreen(kind, data, guardMs) {
     // guardMs: ignore Start/Play-again for a moment so a held or repeated Enter can't skip the screen
@@ -830,18 +1029,25 @@
     setTimeout(function () { var b = $('#btnStart'); if (b && screen) b.focus(); }, 60);
   }
 
-  function saveGame() {
-    if (!game) { notify(t('saveNoGame'), true); return; }
-    if (game.winner !== null) { notify(t('saveOver'), true); return; } // the match is finished — nothing to continue
-    var st = game.saveState();
+  function saveBlocked() {
+    if (!game) return t('saveNoGame');
+    if (game.winner !== null) return t('saveOver'); // the match is finished — nothing to continue
+    return '';
+  }
+  async function saveGame(slot) {
+    var why = saveBlocked(); if (why) { notify(why, true); return; }
+    var st = game.saveState(), saves = getSaves();
+    if (saves[slot]) return; // saved slots are never overwritten
     // saves the match position at the start of the current hand (like the original GAME.SAV)
     if (game.phase !== 'handEnd') st.handNo = Math.max(0, st.handNo - 1);
     if (game.handNo === 1 && game.phase === 'deal') st.declarer = null;
-    store('tractor.save', st);
-    notify(t('saved'));
+    saves = getSaves(); saves[slot] = { state: st, time: Date.now() };
+    store('tractor.saves', saves);
+    notify(t('saved', { n: slot + 1 }));
   }
-  function loadGame() {
-    var st = load('tractor.save', null);
+  function loadGame(slot) {
+    if (typeof slot !== 'number') slot = latestSlot(); // “Continue saved game” → the most recent one
+    var s = slot >= 0 ? getSaves()[slot] : null, st = s && s.state;
     if (!st || !st.levels) { notify(t('noSave'), true); return; }
     if (screen && Date.now() < screen.readyAt) return;
     settings.rules = Object.assign({}, settings.rules, st.rules || {});
@@ -925,8 +1131,10 @@
     $('#dlgOptions').addEventListener('close', closeOptions);
     $('#dlgOptions select[name=luck]').addEventListener('change', syncLuckNote);
     $('#btnRules').addEventListener('click', function () { $('#dlgRules').showModal(); });
-    $('#btnSave').addEventListener('click', saveGame);
-    $('#btnLoad').addEventListener('click', loadGame);
+    $('#btnSaves').addEventListener('click', function (e) { e.stopPropagation(); openSlotMenu(); });
+    document.addEventListener('pointerdown', function (e) { if (slotMenuOpen && !e.target.closest('#slotMenu, #btnSaves, #undoToast')) closeSlotMenu(); });
+    $('#undoBtn').addEventListener('click', undoDelete);
+    window.addEventListener('resize', closeSlotMenu);
     $('#btnLang').addEventListener('click', function () { settings.lang = settings.lang === 'en' ? 'zh' : 'en'; saveSettings(); applyLang(); promptTurnMessage(); });
     $('#btnSound').addEventListener('click', function () { settings.sound = !settings.sound; saveSettings(); syncMusic(); });
     $('#btnMusic').addEventListener('click', function () { settings.music = !settings.music; saveSettings(); syncMusic(); });
@@ -936,6 +1144,22 @@
     });
     document.addEventListener('keydown', function (e) {
       if (document.querySelector('dialog[open]')) return;
+      if (slotMenuOpen) { // the saved-games menu has the keyboard while open
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          if (slotConfirm >= 0) { var c = slotConfirm; slotConfirm = -1; renderSlotMenu(c); } // Esc first backs out of “Delete slot n?”
+          else { closeSlotMenu(); $('#btnSaves').focus(); }
+        }
+        else if ((e.key === 'Delete' || e.key === 'Backspace') && document.activeElement && document.activeElement.matches('#slotMenu .slot-item.filled')) {
+          e.preventDefault(); deleteSlot(+document.activeElement.closest('.slot-wrap').dataset.slot);
+        }
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          var items = $$('#slotMenu .slot-item:not([disabled]), #slotMenu .slot-delete:not([disabled]), #slotMenu .slot-yes, #slotMenu .slot-no'), k = items.indexOf(document.activeElement);
+          if (items.length) items[(k + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+        }
+        return;
+      }
       if (screen && e.key === 'Enter') {
         // Enter on a focused button (Continue saved game, Options, Rules, menu…) does that button's job;
         // otherwise it starts the game.
@@ -956,7 +1180,7 @@
     // browsers only allow music after a user gesture
     document.addEventListener('pointerdown', function first() { document.removeEventListener('pointerdown', first); syncMusic(); });
     $('#btnStart').addEventListener('click', startFromScreen);
-    $('#btnStartLoad').addEventListener('click', loadGame);
+    $('#btnStartLoad').addEventListener('click', function () { loadGame(); });
     $('#btnStartOptions').addEventListener('click', openOptions);
     $('#btnStartRules').addEventListener('click', function () { $('#dlgRules').showModal(); });
     showScreen('start'); // the game waits for “Start game”
