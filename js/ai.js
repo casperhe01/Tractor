@@ -264,9 +264,50 @@
     return hand.reduce(function (a, x) { return a + (E.isTrump(x, c) ? (x.suit === 'J' || x.rank === level ? 2 : 1) : 0); }, 0);
   }
 
-  function chooseDeclare(hand, seat, decl, level, opts, difficulty, dealt) {
+  /*
+   * The human player's partner (对家) declares for the human's team (r37):
+   *  - hand 1, nobody has declared yet → grab at once (抢亮: the first declarer becomes declarer)
+   *  - never overrides the human's declaration; protects it when the rules allow
+   *  - overrides an opponent's single with a pair only when that suit is at least as good for us
+   *    (opponents declaring: ≥ their suit, taking their suit away is a gain; we declaring: ≥ +1)
+   *  - 反无主 only when the opponents are the declarers (hand 1: the opponents declared first), in the
+   *    last window after the deal. Never when our own side is declaring. It also replaces a suit the
+   *    human declared: with all four jokers in our hands, no-trump measured better (tests/declare.js).
+   *    Exception: hand 1 with nobody declared at the end → no-trump grabs the declarer seat.
+   */
+  function allyDeclare(options, hand, seat, decl, level, opts, dealt, info) {
+    var base = { twoPerm: opts.twoPerm };
+    var d = info.declarer, known = d !== null && d !== undefined;
+    var oppDeclaring = known && !E.sameTeam(d, seat), end = dealt >= 25;
+    var nt = options.filter(function (o) { return o.suit === E.NO_TRUMP; })[0];
+    if (nt && end) {
+      if (oppDeclaring) return nt;
+      if (!known && !decl) return nt;
+    }
+    var scored = options.filter(function (o) { return o.suit !== E.NO_TRUMP; }).map(function (o) {
+      return { o: o, s: suitStrength(hand, o.suit, level, base) + (o.count >= 2 ? 0.5 : 0) };
+    }).sort(function (a, b) { return b.s - a.s; });
+    if (!scored.length) return null;
+    var top = scored[0];
+    if (!decl) {
+      if (!known) return top.o; // hand 1: 抢亮
+      if (dealt < 6) return null;
+      return top.s >= dealt * 0.45 + 2 || dealt >= 20 ? top.o : null;
+    }
+    var protect = scored.filter(function (x) { return x.o.kind === 'selfProtect' || x.o.kind === 'partnerProtect'; })[0];
+    if (protect) return protect.o;
+    var cur = suitStrength(hand, decl.suit, level, base);
+    if (decl.seat === info.humanSeat) return null; // never override the human partner
+    if (decl.seat === seat) return top.o.kind === 'selfOverride' && top.s >= cur + 5 ? top.o : null;
+    var over = scored.filter(function (x) { return x.o.kind === 'override'; })[0];
+    if (!over) return null;
+    return over.s >= cur + (oppDeclaring ? 0 : 1) ? over.o : null;
+  }
+
+  function chooseDeclare(hand, seat, decl, level, opts, difficulty, dealt, info) {
     var options = E.declareOptions(hand, seat, decl, level, opts);
     if (!options.length) return null;
+    if (info && info.ally) return allyDeclare(options, hand, seat, decl, level, opts, dealt, info);
     var base = { twoPerm: opts.twoPerm };
     var nt = options.filter(function (o) { return o.suit === E.NO_TRUMP; })[0];
     if (nt && (!decl || !E.sameTeam(decl.seat, seat) || level === 10 || level === 13)) return nt;
@@ -291,8 +332,70 @@
     return top.s >= cur + 1 ? top.o : null;
   }
 
+  /*
+   * 自动亮主 (r37): declare only when it helps your team.
+   *  Strength of a suit X = your trumps if X were trump (jokers / level cards count 2, others 1);
+   *  "mean" = average over the four suits (≈ what a random kitty suit would give you).
+   *  - hand 1, nobody declared yet → grab at once (抢亮: the first declarer becomes declarer);
+   *    a pair if its suit is about as good, else your strongest single
+   *  - declarer already known (hand 2+, or someone else declared first in hand 1) → watch first:
+   *      pair: from 12 cards, if it is your strongest suit and mean+1 (from 20: mean+1)
+   *      single: from 16 cards, strongest suit by 1+ and mean+2; from 21, strongest and mean+1;
+   *              from 24, mean+1
+   *      (thresholds tuned with tests/declare.js: earlier declaring measured worse)
+   *      after the deal (last chance): always your best suit — you are never asked to choose (r43)
+   *  - your own single: lock it (自保) if it is still within 1 of your best other suit (always at the end); switch (自反,
+   *    when allowed) only to a suit 3+ stronger
+   *  - partner's single: protect (对家保, when allowed) unless that suit is clearly bad for you;
+   *    never override your partner
+   *  - opponents' single: override (反主) with your best pair if it is stronger for you — when the
+   *    opponents are the declarers an equal suit is enough (taking their suit away is a gain);
+   *    before 13 cards one extra point is required
+   *  - never no-trump (owner, r36): the NT button stays lit for you to press
+   */
+  function autoDeclarePick(g, final) {
+    var me = g.humanSeat;
+    if (me === null || me === undefined) return null;
+    var opts = g.humanDeclareOptions().filter(function (o) { return o.suit !== 'N'; }), decl = g.decl;
+    if (!opts.length) return null;
+    var hand = g.hands[me], n = hand.length, S = {}, sum = 0;
+    E.SUITS.forEach(function (x) { S[x] = suitStrength(hand, x, g.level, { twoPerm: g.rules.twoPerm }); sum += S[x]; });
+    var mean = sum / 4;
+    var bestOther = function (x) { return Math.max.apply(null, E.SUITS.filter(function (y) { return y !== x; }).map(function (y) { return S[y]; })); };
+    var d = g.declarer !== null && g.declarer !== undefined ? g.declarer : g.firstDeclarer;
+    var known = d !== null && d !== undefined, oppDeclaring = known && !E.sameTeam(d, me);
+    var pick = function (kind, bonus) {
+      return opts.filter(function (o) { return !kind || o.kind === kind; })
+        .sort(function (a, b) { return (S[b.suit] + (b.count >= 2 ? bonus : 0)) - (S[a.suit] + (a.count >= 2 ? bonus : 0)); })[0] || null;
+    };
+    if (!decl) {
+      if (!known) return pick(null, 2); // hand 1: 抢亮
+      var o = pick(null, 0.5), s = S[o.suit], lead = s - bestOther(o.suit);
+      if (final) return o; // last chance: always declare your best suit for you (owner, r43)
+      if (o.count >= 2) return (n >= 12 && lead >= 0 && s >= mean + 1) || (n >= 20 && s >= mean + 1) ? o : null;
+      if (n >= 16 && lead >= 1 && s >= mean + 2) return o;
+      if (n >= 21 && lead >= 0 && s >= mean + 1) return o;
+      return n >= 24 && s >= mean + 1 ? o : null;
+    }
+    var X = decl.suit;
+    if (decl.seat === me) { // your own single
+      var sw = pick('selfOverride', 0);
+      if (sw && S[sw.suit] >= S[X] + 3) return sw;
+      var lock = pick('selfProtect', 0);
+      return lock && (final || S[X] >= bestOther(X) - 1) ? lock : null;
+    }
+    if (E.sameTeam(decl.seat, me)) { // partner's single
+      var pp = pick('partnerProtect', 0);
+      return pp && S[X] >= mean - 1 ? pp : null;
+    }
+    var ov = pick('override', 0); // opponents' single
+    if (!ov) return null;
+    var need = S[X] + (oppDeclaring ? 0 : 1) + (n < 13 && !final ? 1 : 0);
+    return S[ov.suit] >= need && S[ov.suit] >= mean ? ov : null;
+  }
+
   var api = {
-    chooseLead: chooseLead, chooseFollow: chooseFollow, chooseBury: chooseBury, chooseDeclare: chooseDeclare,
+    chooseLead: chooseLead, chooseFollow: chooseFollow, chooseBury: chooseBury, chooseDeclare: chooseDeclare, suitStrength: suitStrength, autoDeclarePick: autoDeclarePick,
     buildFromPool: buildFromPool, legalFallback: legalFallback
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

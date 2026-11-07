@@ -447,41 +447,13 @@
     }
   }
 
-  // Tell the player they can declare, naming the suit button(s) to click.
-  /*
-   * 自动亮主: choose a declaration for you, or null.
-   *  - nobody has declared → declare your strongest suit (a pair if you have one, which locks it)
-   *  - your own single → lock it (自保); partner's single → partner protect (对家保) if allowed
-   *  - opponents' single → override with your strongest pair (反主)
-   *  - four jokers → never no-trump automatically (owner, r36): the NT button stays lit for you to press
-   *  Never overrides your partner, and never switches your own suit (自反).
-   */
-  function autoDeclarePick(g) {
-    var opts = g.humanDeclareOptions(), decl = g.decl;
-    var ours = decl && E.sameTeam(decl.seat, 0);
-    var strength = function (suit) {
-      if (suit === 'N') return 0;
-      var ctx = { level: g.level, trump: suit, twoPerm: g.rules.twoPerm };
-      return g.hands[0].reduce(function (a, c) { return a + (E.isTrump(c, ctx) ? 1 : 0); }, 0);
-    };
-    var ok = opts.filter(function (o) {
-      if (o.kind === 'selfOverride') return false;
-      if (o.kind === 'override' && ours) return false;
-      if (o.suit === 'N') return false; // 反无主 is always your own choice
-      return true;
-    });
-    if (!ok.length) return null;
-    var rank = { selfProtect: 3, partnerProtect: 3, override: 1, first: 0 };
-    ok.sort(function (a, b) {
-      return (rank[b.kind] - rank[a.kind]) || (b.count - a.count) || (strength(b.suit) - strength(a.suit));
-    });
-    return ok[0];
-  }
+  // 自动亮主: the choice itself lives in ai.js (AI.autoDeclarePick) so node tests can measure it.
+  function autoDeclarePick(g, final) { return AI.autoDeclarePick(g, final); }
 
   // Returns true if a declaration was made automatically for you.
-  function tryAutoDeclare(g) {
+  function tryAutoDeclare(g, final) {
     if (!settings.autoDeclare || g.phase !== 'deal') return false;
-    var pick = autoDeclarePick(g);
+    var pick = autoDeclarePick(g, final);
     if (!pick) return false;
     var opt = g.humanDeclareOptions().filter(function (o) { return o.suit === pick.suit && o.kind === pick.kind; })[0];
     if (!opt) return false;
@@ -491,8 +463,21 @@
     return true;
   }
 
+  // Tell the player they can declare, naming the suit button(s) to click.
+  // With 自动亮主 on the suit choice is never handed to you (r43): during the deal it says it is
+  // watching, after the deal it says why it did not declare; only the NT button (反无主 is always
+  // your own choice, r36) is still pointed out.
   function promptDeclare(last) {
     var opts = game.humanDeclareOptions(), seen = {}, chips = [];
+    if (settings.autoDeclare) {
+      var nt = opts.some(function (o) { return o.suit === 'N'; });
+      var suits = opts.some(function (o) { return o.suit !== 'N'; });
+      var txt = suits ? t(last ? 'msgAutoSkip' : 'msgAutoWatching') : '';
+      if (nt && last) txt = (txt ? txt + ' ' : '') + t('msgCanDeclareLast', { suits: suitText('N') });
+      if (txt) message(txt, false, true);
+      renderDeclareBar();
+      return;
+    }
     opts.forEach(function (o) { if (!seen[o.suit]) { seen[o.suit] = 1; chips.push(suitText(o.suit)); } });
     message(t(last ? 'msgCanDeclareLast' : 'msgCanDeclare', { suits: chips.join(' ') }), false, true);
     renderDeclareBar();
@@ -615,13 +600,14 @@
         // You just got a new way to declare: pause the deal so you have time to click (the computer waits too).
         if (kind === 'deal' && g.phase === 'deal') {
           var key = g.humanDeclareOptions().map(function (o) { return o.suit + o.count; }).join(',');
-          if (key && key !== declareKey) {
-            if (tryAutoDeclare(g)) key = g.humanDeclareOptions().map(function (o) { return o.suit + o.count; }).join(',');
-            else { ms = SPEED[settings.speed].declarePause; promptDeclare(); }
-          }
+          if (key && settings.autoDeclare) {
+            // 自动亮主 watches every card (it may wait for a better suit); no pause, the bar stays lit
+            if (tryAutoDeclare(g, false)) key = g.humanDeclareOptions().map(function (o) { return o.suit + o.count; }).join(',');
+            else if (key !== declareKey) promptDeclare();
+          } else if (key && key !== declareKey) { ms = SPEED[settings.speed].declarePause; promptDeclare(); }
           declareKey = key;
         }
-        if (kind === 'declareWindow' && g.humanDeclareOptions().length && !tryAutoDeclare(g) && g.humanDeclareOptions().length) promptDeclare(true);
+        if (kind === 'declareWindow' && g.humanDeclareOptions().length && !tryAutoDeclare(g, true) && g.humanDeclareOptions().length) promptDeclare(true);
         return new Promise(function (res) { var id = setTimeout(res, ms); timers.push({ id: id, res: res }); });
       },
       askPlay: function () {
@@ -651,7 +637,7 @@
       case 'dealEnd':
         renderAll();
         if (game.ntLevel) { message(t('msgNtLevel')); break; }
-        if (game.humanDeclareOptions().length && !tryAutoDeclare(game)) promptDeclare(true);
+        if (game.humanDeclareOptions().length && !tryAutoDeclare(game, true)) promptDeclare(true);
         else if (!game.decl || game.decl.by !== 0) message(t('msgDealEnd'));
         break;
       case 'declare': {

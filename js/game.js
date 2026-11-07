@@ -97,7 +97,11 @@
     if (this.ntLevel) return;
     for (var s = 0; s < 4; s++) {
       if (this.isHuman(s) || s === this.noDeclareSeat) continue;
-      var o = AI.chooseDeclare(this.hands[s], s, this.decl, this.level, this.rules, this.seatDifficulty(s), dealt);
+      var info = {
+        ally: this.humanSeat !== null && s === E.partnerOf(this.humanSeat), humanSeat: this.humanSeat,
+        declarer: this.declarer !== null && this.declarer !== undefined ? this.declarer : this.firstDeclarer
+      };
+      var o = AI.chooseDeclare(this.hands[s], s, this.decl, this.level, this.rules, this.seatDifficulty(s), dealt, info);
       if (o) this.applyDeclare(s, o);
     }
   };
