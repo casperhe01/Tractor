@@ -71,6 +71,7 @@ node tests/simulate.js 24     # full computer-vs-computer matches; checks every 
 node tests/benchmark.js 300   # checks Hard > Medium > Easy
 node tests/luck.js 300        # measures good-hand mode through the real player seat
 node tests/mustwin.js 160     # measures must-win mode for normal and weak players
+node tests/declare.js 2000     # 自动亮主 + partner declaring: no-trump only against the opponents, win/level edge
 ```
 
 ## Notes and decisions
