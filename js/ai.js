@@ -100,6 +100,28 @@
     return !E.componentBeatable(comp, suit, [unseen(view)], view.ctx);
   }
 
+  /*
+   * 甩牌 (r45). Medium and Hard throw when the throw is sure to stand: every component must be
+   * unbeatable by all cards the thrower cannot rule out — pooled as if one player held them all
+   * (stricter than the real check). Cards already played are public, so Medium remembers them for
+   * this (Hard also knows the cards it buried). A suit an opponent is known to be void in is not
+   * thrown (they would trump it). Test hook: TractorAI.throwOff(seat) → true disables throwing.
+   */
+  var throwOff = null;
+  function throwUnseen(view) {
+    var known = view.hand.concat(view.played || []);
+    if (view.difficulty >= 3 && view.buried) known = known.concat(view.buried);
+    return minus(view.deck, known);
+  }
+  function sureThrow(cardsOfSuit, suit, view) {
+    if (view.difficulty < 2 || (throwOff && throwOff(view.seat))) return null;
+    var pool = [throwUnseen(view)];
+    var boss = E.decompose(cardsOfSuit, view.ctx).filter(function (c) { return !E.componentBeatable(c, suit, pool, view.ctx); });
+    if (boss.length < 2) return null;
+    var cards = [].concat.apply([], boss.map(function (c) { return c.cards; }));
+    return E.checkThrow(cards, pool, view.ctx).ok ? cards : null; // re-check the combined shape
+  }
+
   /* ---------- leading ---------- */
 
   function chooseLead(view) {
@@ -119,17 +141,20 @@
     var opp = [E.nextSeat(view.seat), E.nextSeat(E.nextSeat(E.nextSeat(view.seat)))];
     var partner = E.partnerOf(view.seat);
     var oppVoid = function (s) { return d >= 3 && opp.some(function (o) { return voids[o] && voids[o][s]; }); };
+    // voids are public (everyone saw the player fail to follow), so throws avoid them at Medium too
+    var oppKnownVoid = function (s) { return opp.some(function (o) { return voids[o] && voids[o][s]; }); };
 
     // Last trick for defenders, or the declarer's side guarding the kitty: lead the biggest structure.
     // 1. Boss combinations in plain suits (A's, top pairs, tractors) — keep the lead.
     var best = null;
     plain.forEach(function (s) {
       if (oppVoid(s)) return;
+      var thrown = oppKnownVoid(s) ? null : sureThrow(suits[s], s, view);
       var comps = E.decompose(suits[s], ctx);
       var boss = comps.filter(function (c) { return isBoss(c, s, view); });
-      if (!boss.length) return;
+      if (!boss.length && !thrown) return;
       var cards;
-      if (d >= 3 && boss.length >= 2) cards = [].concat.apply([], boss.map(function (c) { return c.cards; }));
+      if (thrown) cards = thrown;
       else {
         boss.sort(function (a, b) { return b.cards.length - a.cards.length || b.v - a.v; });
         cards = boss[0].cards;
@@ -153,6 +178,8 @@
     // 3. Declaring side with lots of trumps: pull trumps with boss trump structures.
     var trumps = suits.T || [];
     if (trumps.length >= hand.length * 0.5 && trumps.length) {
+      var tThrow = sureThrow(trumps, 'T', view); // e.g. both big jokers + a small joker
+      if (tThrow) return tThrow;
       var tc = E.decompose(trumps, ctx).filter(function (c) { return c.type !== 'single' || isBoss(c, 'T', view); });
       if (tc.length) return tc[0].cards;
     }
@@ -166,6 +193,8 @@
       if (pairs.length && Math.random() < 0.5) return pairs[pairs.length - 1].cards;
       return [suits[s3].slice().sort(sorter('low', ctx))[0]];
     }
+    var tLast = sureThrow(trumps, 'T', view); // only trumps left
+    if (tLast) return tLast;
     return [trumps.slice().sort(sorter('low', ctx))[0]];
   }
 
@@ -339,10 +368,11 @@
    *  - hand 1, nobody declared yet → grab at once (抢亮: the first declarer becomes declarer);
    *    a pair if its suit is about as good, else your strongest single
    *  - declarer already known (hand 2+, or someone else declared first in hand 1) → watch first:
-   *      pair: from 12 cards, if it is your strongest suit and mean+1 (from 20: mean+1)
-   *      single: from 16 cards, strongest suit by 1+ and mean+2; from 21, strongest and mean+1;
-   *              from 24, mean+1
-   *      (thresholds tuned with tests/declare.js: earlier declaring measured worse)
+   *      pair: from 6 cards, if it is your strongest suit (from 10: at least the mean)
+   *      single: from 8 cards, strongest suit by 1+ and mean+1; from 12, strongest and mean+1;
+   *              from 16, at least the mean
+   *      (r44: earlier than r42/r43 — waiting longer let others declare first in ~35% of hands;
+   *       measured better on three seeds; much earlier (from 4–6 cards) measured worse)
    *      after the deal (last chance): always your best suit — you are never asked to choose (r43)
    *  - your own single: lock it (自保) if it is still within 1 of your best other suit (always at the end); switch (自反,
    *    when allowed) only to a suit 3+ stronger
@@ -372,10 +402,10 @@
       if (!known) return pick(null, 2); // hand 1: 抢亮
       var o = pick(null, 0.5), s = S[o.suit], lead = s - bestOther(o.suit);
       if (final) return o; // last chance: always declare your best suit for you (owner, r43)
-      if (o.count >= 2) return (n >= 12 && lead >= 0 && s >= mean + 1) || (n >= 20 && s >= mean + 1) ? o : null;
-      if (n >= 16 && lead >= 1 && s >= mean + 2) return o;
-      if (n >= 21 && lead >= 0 && s >= mean + 1) return o;
-      return n >= 24 && s >= mean + 1 ? o : null;
+      if (o.count >= 2) return (n >= 6 && lead >= 0) || (n >= 10 && s >= mean) ? o : null;
+      if (n >= 8 && lead >= 1 && s >= mean + 1) return o;
+      if (n >= 12 && lead >= 0 && s >= mean + 1) return o;
+      return n >= 16 && s >= mean ? o : null;
     }
     var X = decl.suit;
     if (decl.seat === me) { // your own single
@@ -396,6 +426,7 @@
 
   var api = {
     chooseLead: chooseLead, chooseFollow: chooseFollow, chooseBury: chooseBury, chooseDeclare: chooseDeclare, suitStrength: suitStrength, autoDeclarePick: autoDeclarePick,
+    set throwOff(f) { throwOff = f; }, get throwOff() { return throwOff; },
     buildFromPool: buildFromPool, legalFallback: legalFallback
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

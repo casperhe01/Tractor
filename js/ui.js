@@ -432,13 +432,18 @@
   function clearSelection() { selected = {}; }
   function selectedCards() { return game.hands[0].filter(function (c) { return selected[c.id]; }); }
 
-  // 钓主: another player (partner or opponent) led trumps in the current trick → "西 钓主 · " before the prompt
-  function trumpLeadNote() {
+  // 钓主 / 甩牌: another player (partner or opponent) led trumps, or threw several cards at once (r45),
+  // in the current trick → "西 钓主 · " / "西 甩牌 · " / "西 甩主牌 · " before the prompt
+  function leadNoteText() {
     if (!game || game.phase !== 'play' || !game.trick || !game.trick.length) return '';
     var lead = game.trick[0];
-    if (lead.seat === 0 || E.uniformSuit(lead.cards, game.ctx) !== 'T') return '';
-    return t('msgTrumpLead', { seat: seatName(lead.seat) }) + ' · ';
+    if (lead.seat === 0) return '';
+    var trump = E.uniformSuit(lead.cards, game.ctx) === 'T';
+    var thrown = E.decompose(lead.cards, game.ctx).length > 1;
+    if (thrown) return t(trump ? 'msgThrowTrumpLead' : 'msgThrowLead', { seat: seatName(lead.seat) });
+    return trump ? t('msgTrumpLead', { seat: seatName(lead.seat) }) : '';
   }
+  function trumpLeadNote() { var n = leadNoteText(); return n ? n + ' · ' : ''; }
   function promptTurnMessage() {
     if (mode === 'bury') message(t('msgBury'), false, true);
     else if (mode === 'play') {
@@ -662,7 +667,7 @@
         tick(440 + d.seat * 40);
         if (d.trick.length === 1) $$('.slot').forEach(function (s) { s.innerHTML = ''; s.classList.remove('win'); });
         renderTrick(d.seat); renderSeats(); if (d.seat === 0) renderHand();
-        if (d.trick.length === 1 && trumpLeadNote()) message(t('msgTrumpLead', { seat: seatName(d.seat) }));
+        if (d.trick.length === 1 && leadNoteText()) message(leadNoteText());
         break;
       case 'throwFailed':
         message(t('msgThrowFailed', { seat: seatName(d.seat), cards: d.forced.map(cardText).join(' ') }), true);
